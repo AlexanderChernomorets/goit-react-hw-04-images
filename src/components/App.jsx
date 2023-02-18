@@ -1,4 +1,4 @@
-import { Component } from 'react';
+import { useState, useEffect } from 'react';
 import Notiflix from 'notiflix';
 import fetchApi from 'Servises/fetchApi';
 import Searchbar from './Searchbar/Searchbar';
@@ -7,151 +7,108 @@ import Loader from './Loader/Loader';
 import Button from './Button/Button';
 import Modal from './Modal/Modal';
 
-class App extends Component {
-  state = {
-    imageName: '',
-    page: 1,
-    imagesOnPage: 0,
-    totalImages: 0,
-    loading: false,
-    showModal: false,
-    images: [],
-    error: null,
-    currentImageUrl: null,
-    currentImageDescription: null,
-  };
+function App() {
+  const [imageName, setImageName] = useState('');
+  const [page, setPage] = useState(1);
+  const [totalImages, setTotalImages] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [images, setImages] = useState([]);
+  const [error, setError] = useState(null);
+  const [currentImageUrl, setCurrentImageUrl] = useState(null);
+  const [currentImageDescription, setCurrentImageDescription] = useState(null);
 
-  componentDidUpdate(prevProps, prevState) {
-    const { imageName, page } = this.state;
-
-    if (prevState.imageName !== imageName) {
-      this.setState(({ loading }) => ({ loading: !loading }));
-
-      fetchApi(imageName)
-        .then(({ hits, totalHits }) => {
-          const imagesArray = hits.map(hit => ({
-            id: hit.id,
-            alt: hit.tags,
-            smallImage: hit.webformatURL,
-            largeImage: hit.largeImageURL,
-          }));
-
-          return this.setState({
-            page: 1,
-            images: imagesArray,
-            imagesOnPage: imagesArray.length,
-            totalImages: totalHits,
-          });
-        })
-        .catch(error => this.setState({ error }))
-        .finally(() => this.setState(({ loading }) => ({ loading: !loading })));
-    }
-
-    if (prevState.page !== page && page !== 1) {
-      this.setState(({ loading }) => ({ loading: !loading }));
-
-      Notiflix.Notify.success(`We found more images.`);
+  useEffect(() => {
+    if (imageName !== '') {
+      setLoading(prevLoading => !prevLoading);
 
       fetchApi(imageName, page)
-        .then(({ hits }) => {
-          const imagesArray = hits.map(hit => ({
-            id: hit.id,
-            alt: hit.tags,
-            smallImage: hit.webformatURL,
-            largeImage: hit.largeImageURL,
-          }));
-
-          return this.setState(({ images, imagesOnPage }) => {
-            return {
-              images: [...images, ...imagesArray],
-              imagesOnPage: imagesOnPage + imagesArray.length,
-            };
-          });
+        .then(({ hits: images, totalHits: total }) => {
+          const imagesArray = images.map(
+            ({ id, tags, webformatURL, largeImageURL }) => ({
+              id: id,
+              alt: tags,
+              smallImage: webformatURL,
+              largeImage: largeImageURL,
+            })
+          );
+          setTotalImages(total);
+          if (total === 0) {
+            Notiflix.Notify.failure(
+              'Sorry, there are no images for your search query. Please try again.'
+            );
+          }
+          return imagesArray;
         })
-        .catch(error => this.setState({ error }))
-        .finally(() => this.setState(({ loading }) => ({ loading: !loading })));
+        .then(imagesArray => {
+          if (page === 1) {
+            setImages(imagesArray);
+          }
+          return imagesArray;
+        })
+        .then(imagesArray => {
+          if (page !== 1) {
+            setImages(prevImages => [...prevImages, ...imagesArray]);
+          }
+        })
+        .catch(error => setError(error))
+        .finally(() => setLoading(prevLoading => !prevLoading));
     }
-    setTimeout(() => {
-      if (this.state.imagesOnPage === 0) {
-        Notiflix.Notify.failure(
-          'Sorry, there are no images for your search query. Please try again.'
-        );
-      }
-      return;
-    }, 500);
-  }
+  }, [page, imageName]);
 
-  getSearchRequest = imageName => {
-    this.setState({ imageName });
+  const getSearchRequest = imageName => {
+    if (imageName === '') {
+      Notiflix.Notify.info('Please, enter an image title to start searching.');
+    }
+    setImageName(imageName);
+    setPage(1);
   };
 
-  onNextFetch = () => {
-    this.setState(({ page }) => ({ page: page + 1 }));
+  const onNextFetch = () => setPage(prevPage => prevPage + 1);
+
+  const toggleModal = () => {
+    setShowModal(!showModal);
   };
 
-  toggleModal = () => {
-    this.setState(({ showModal }) => ({ showModal: !showModal }));
-  };
-
-  openModal = e => {
+  const openModal = e => {
     const currentImageUrl = e.target.dataset.large;
     const currentImageDescription = e.target.alt;
 
     if (e.target.nodeName === 'IMG') {
-      this.setState(({ showModal }) => ({
-        showModal: !showModal,
-        currentImageUrl: currentImageUrl,
-        currentImageDescription: currentImageDescription,
-      }));
+      setShowModal(!showModal);
+      setCurrentImageUrl(currentImageUrl);
+      setCurrentImageDescription(currentImageDescription);
     }
   };
 
-  render() {
-    const {
-      images,
-      totalImages,
-      loading,
-      showModal,
-      currentImageUrl,
-      currentImageDescription,
-    } = this.state;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'center',
+        flexDirection: 'column',
+        alignItems: 'center',
+        fontSize: 40,
+        color: '#010101',
+      }}
+    >
+      <Searchbar onSubmit={getSearchRequest} />
 
-    const getSearchRequest = this.getSearchRequest;
-    const onNextFetch = this.onNextFetch;
-    const openModal = this.openModal;
-    const toggleModal = this.toggleModal;
+      {images && <ImageGallery images={images} openModal={openModal} />}
 
-    return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'center',
-          flexDirection: 'column',
-          alignItems: 'center',
-          fontSize: 40,
-          color: '#010101',
-        }}
-      >
-        <Searchbar onSubmit={getSearchRequest} />
+      {loading && <Loader />}
 
-        {images && <ImageGallery images={images} openModal={openModal} />}
+      {images.length < totalImages && <Button onNextFetch={onNextFetch} />}
 
-        {loading && <Loader />}
-
-        {images.length < totalImages && (
-          <Button onNextFetch={onNextFetch} />
-        )}
-
-        {showModal && (
-          <Modal
-            onClose={toggleModal}
-            currentImageUrl={currentImageUrl}
-            currentImageDescription={currentImageDescription}
-          />
-        )}
-      </div>
-    );
-  }
+      {showModal && (
+        <Modal
+          onClose={toggleModal}
+          currentImageUrl={currentImageUrl}
+          currentImageDescription={currentImageDescription}
+        />
+      )}
+    </div>
+  );
 }
 
 export default App;
