@@ -54,6 +54,7 @@ function App() {
         .catch(error => setError(error))
         .finally(() => setLoading(prevLoading => !prevLoading));
     }
+
   }, [page, imageName]);
 
   const getSearchRequest = imageName => {
@@ -107,6 +108,7 @@ function App() {
           currentImageDescription={currentImageDescription}
         />
       )}
+      {error && <p>Error!</p>}
     </div>
   );
 }
